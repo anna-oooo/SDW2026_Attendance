@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDW 2026 · Attendance</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F7F5F0;--surface:#FFFFFF;--surface2:#F0EDE6;--border:#E2DDD4;--border2:#CCC7BC;
+  --ink:#1A1916;--ink2:#5C574F;--ink3:#9C978E;
+  --accent:#C4622D;--accent-bg:#FDF1EB;--accent-border:#E8C4AF;
+  --green:#2B6644;--green-bg:#EBF4EF;--green-border:#A8D4B8;
+  --blue:#1E3A5F;--blue-bg:#EBF0F7;
+  --red:#8B2020;--red-bg:#FAEDED;--red-border:#DBA8A8;
+  --r:6px;--r-lg:10px;
+  --shadow:0 1px 3px rgba(26,25,22,.08),0 4px 12px rgba(26,25,22,.04);
+  --shadow-lg:0 4px 16px rgba(26,25,22,.10),0 1px 4px rgba(26,25,22,.06);
+  --display:'Syne',sans-serif;--body:'DM Sans',sans-serif;
+}
+html{font-size:16px;-webkit-font-smoothing:antialiased}
+body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100vh;line-height:1.5}
+
+/* ─── SETUP BANNER ─── */
+#setup-banner{background:#1A1916;color:#fff;padding:10px 20px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#setup-banner strong{font-family:var(--display)}
+#setup-banner input{padding:5px 10px;font-size:12px;font-family:monospace;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#fff;width:260px;outline:none}
+#setup-banner input::placeholder{color:rgba(255,255,255,0.4)}
+#setup-banner input:focus{background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.4)}
+#setup-banner button{padding:5px 14px;font-size:12px;font-family:var(--display);font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap}
+#setup-banner button:hover{background:#a8501f}
+.setup-err{font-size:11px;color:#ffa07a;display:none}
+
+/* ─── LOADING OVERLAY ─── */
+#loader{display:none;position:fixed;inset:0;background:rgba(247,245,240,.8);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+#loader.on{display:flex}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── TOAST ─── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:6px;font-size:13px;opacity:0;transition:all .3s;z-index:9998;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.error{background:var(--red)}
+
+/* ─── NAV ─── */
+.top-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.nav-brand{display:flex;align-items:center;gap:10px}
+.nav-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.nav-title{font-family:var(--display);font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.nav-sub{font-size:12px;color:var(--ink3);margin-left:2px}
+.nav-right button{font-family:var(--body);font-size:12px;color:var(--ink3);background:none;border:1px solid var(--border);padding:5px 12px;border-radius:4px;cursor:pointer;transition:all .15s}
+.nav-right button:hover{color:var(--ink);border-color:var(--border2);background:var(--surface2)}
+
+/* ─── STUDENT VIEW ─── */
+#student-view,#teacher-view{min-height:calc(100vh - 57px)}
+#teacher-view{display:none}
+.student-wrap{max-width:520px;margin:0 auto;padding:2.5rem 1.5rem 5rem}
+
+/* Progress */
+.progress-track{display:flex;align-items:flex-start;margin-bottom:2.5rem}
+.prog-step{display:flex;align-items:center;flex:1}
+.prog-step:last-child{flex:0}
+.prog-circle{width:28px;height:28px;border-radius:50%;border:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--ink3);transition:all .3s;flex-shrink:0;font-family:var(--display)}
+.prog-circle.active{border-color:var(--accent);background:var(--accent);color:#fff}
+.prog-circle.done{border-color:var(--green);background:var(--green);color:#fff;font-size:13px}
+.prog-line{flex:1;height:2px;background:var(--border);margin:0 3px;border-radius:1px;transition:background .3s;margin-top:13px}
+.prog-line.done{background:var(--green)}
+
+.step{display:none;animation:stepIn .25s ease}
+.step.active{display:block}
+@keyframes stepIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.step-header{margin-bottom:1.75rem}
+.step-num{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.step-title{font-family:var(--display);font-size:26px;font-weight:700;color:var(--ink);line-height:1.15;letter-spacing:-.02em}
+.step-sub{font-size:14px;color:var(--ink2);margin-top:5px}
+
+/* Fields */
+.field{margin-bottom:1.25rem}
+label.fl{display:block;font-size:12px;font-weight:500;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+input[type=text]{width:100%;padding:11px 14px;font-family:var(--body);font-size:15px;color:var(--ink);background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);outline:none;transition:border-color .2s,box-shadow .2s}
+input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(196,98,45,.10)}
+input[type=text]::placeholder{color:var(--ink3)}
+
+/* Chips */
+.chip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.chip{padding:10px 14px;font-size:13px;color:var(--ink2);background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;transition:all .15s;font-family:var(--body);text-align:left;line-height:1.4}
+.chip:hover{border-color:var(--border2);background:var(--surface2)}
+.chip.selected{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:500}
+.chip-empty{font-size:13px;color:var(--ink3);padding:1rem 0;font-style:italic}
+
+/* Uploads */
+.upload-optional{display:inline-block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);background:var(--surface2);padding:2px 7px;border-radius:3px;margin-bottom:8px}
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--r-lg);padding:1.5rem;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--surface)}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--accent-bg)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-icon{font-size:28px;margin-bottom:8px;display:block}
+.upload-title{font-size:14px;font-weight:500;color:var(--ink)}
+.upload-sub{font-size:12px;color:var(--ink3);margin-top:3px}
+.upload-preview{display:none;align-items:center;gap:10px;background:var(--surface2);border-radius:var(--r);padding:8px 12px;margin-top:10px}
+.upload-preview.show{display:flex}
+.preview-thumb{width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0}
+.preview-doc-icon{width:40px;height:40px;border-radius:4px;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.preview-name{flex:1;font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-size{font-size:11px;color:var(--ink3)}
+.preview-remove{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:18px;padding:2px 4px;line-height:1}
+.preview-remove:hover{color:var(--red)}
+.upload-error{font-size:12px;color:var(--red);margin-top:6px;display:none}
+.upload-error.show{display:block}
+
+/* Review */
+.review-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.review-row{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.review-row:last-child{border-bottom:none}
+.review-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);min-width:80px;padding-top:2px;flex-shrink:0}
+.review-val{font-size:14px;color:var(--ink);flex:1}
+.review-thumb{width:36px;height:36px;border-radius:4px;object-fit:cover}
+.review-file-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--green);background:var(--green-bg);padding:3px 9px;border-radius:3px;border:1px solid var(--green-border)}
+
+/* Buttons */
+.btn-row{display:flex;gap:10px;margin-top:1.75rem}
+.btn{padding:12px 24px;font-family:var(--display);font-size:14px;font-weight:600;border-radius:var(--r);cursor:pointer;border:none;transition:all .2s;letter-spacing:.01em}
+.btn-primary{background:var(--accent);color:#fff;flex:1}
+.btn-primary:hover{background:#A8501F;transform:translateY(-1px);box-shadow:0 4px 12px rgba(196,98,45,.3)}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-ghost{background:var(--surface);color:var(--ink2);border:1.5px solid var(--border)}
+.btn-ghost:hover{border-color:var(--border2);color:var(--ink);background:var(--surface2)}
+.btn-green{background:var(--green);color:#fff;flex:1}
+.btn-green:hover{background:#1E4D32;transform:translateY(-1px)}
+.btn-green:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* Confirm */
+.confirm-wrap{text-align:center;padding:2rem 0 1rem}
+.confirm-check{width:72px;height:72px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green-border);display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;animation:popIn .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes popIn{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:scale(1)}}
+.confirm-check svg{width:32px;height:32px;stroke:var(--green);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.confirm-check svg path{stroke-dasharray:40;stroke-dashoffset:40;animation:draw .4s .3s ease forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.confirm-name{font-family:var(--display);font-size:24px;font-weight:700;color:var(--ink)}
+.confirm-detail{font-size:13px;color:var(--ink3);margin-top:6px;line-height:1.8}
+.confirm-time{font-family:'DM Mono',monospace;display:inline-block;margin-top:10px;padding:5px 12px;background:var(--surface2);border-radius:4px;font-size:12px;color:var(--ink2);border:1px solid var(--border)}
+
+/* ─── TEACHER DASHBOARD ─── */
+.dash-wrap{display:flex;min-height:calc(100vh - 57px)}
+.dash-sidebar{width:220px;flex-shrink:0;background:var(--ink);padding:1.5rem 0;display:flex;flex-direction:column}
+.sidebar-section{padding:0 12px;margin-bottom:.5rem}
+.sidebar-label{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.3);padding:0 8px;margin-bottom:4px}
+.sidebar-item{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:5px;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;transition:all .15s;border:none;background:none;width:100%;font-family:var(--body);text-align:left}
+.sidebar-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.sidebar-item.active{background:var(--accent);color:#fff}
+.si-icon{font-size:15px;flex-shrink:0}
+.sidebar-spacer{flex:1}
+.sidebar-signout{padding:12px;border-top:1px solid rgba(255,255,255,.1)}
+.sidebar-signout button{width:100%;padding:8px 12px;font-size:12px;color:rgba(255,255,255,.4);background:none;border:1px solid rgba(255,255,255,.12);border-radius:4px;cursor:pointer;font-family:var(--body);transition:all .15s}
+.sidebar-signout button:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+.dash-main{flex:1;overflow:auto;padding:2rem}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:1.75rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1rem 1.25rem;box-shadow:var(--shadow)}
+.stat-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3)}
+.stat-val{font-family:var(--display);font-size:28px;font-weight:700;color:var(--ink);margin-top:4px;line-height:1}
+.stat-sub{font-size:11px;color:var(--ink3);margin-top:3px}
+
+/* Table toolbar */
+.table-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap}
+.toolbar-title{font-family:var(--display);font-size:17px;font-weight:700;color:var(--ink);flex:1;min-width:100px}
+.filter-group{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.f-select{padding:7px 30px 7px 10px;font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:5px;outline:none;cursor:pointer;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239C978E' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;font-family:var(--body)}
+.f-select:focus{border-color:var(--accent)}
+.f-search{padding:7px 12px;font-size:12px;font-family:var(--body);color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:5px;outline:none;width:160px}
+.f-search:focus{border-color:var(--accent)}
+.f-btn{padding:7px 14px;font-size:12px;font-family:var(--display);font-weight:600;border-radius:5px;cursor:pointer;white-space:nowrap;transition:all .15s}
+.btn-export{color:var(--green);background:var(--green-bg);border:1px solid var(--green-border)}
+.btn-export:hover{background:#d8eddf}
+.btn-refresh{color:var(--ink2);background:var(--surface);border:1px solid var(--border)}
+.btn-refresh:hover{background:var(--surface2)}
+
+/* Table */
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+thead th:first-child{padding-left:16px}
+tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+tbody td{padding:11px 14px;font-size:13px;color:var(--ink);vertical-align:middle}
+tbody td:first-child{padding-left:16px}
+.td-name{display:flex;align-items:center;gap:10px}
+.avatar-thumb{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid var(--border);cursor:pointer;flex-shrink:0;transition:opacity .15s}
+.avatar-thumb:hover{opacity:.8}
+.avatar-ini{width:34px;height:34px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--ink3);flex-shrink:0;font-family:var(--display)}
+.td-name-text{font-weight:500}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:4px;font-size:11px;font-weight:500}
+.badge-class{background:var(--blue-bg);color:var(--blue)}
+.time-mono{font-family:'DM Mono',monospace;font-size:11px;color:var(--ink3)}
+.doc-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent);text-decoration:none;padding:3px 8px;background:var(--accent-bg);border-radius:4px;border:1px solid var(--accent-border)}
+.doc-link:hover{background:#f5e0d0}
+.no-file{font-size:12px;color:var(--ink3)}
+.row-del{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:15px;padding:4px 6px;border-radius:4px;transition:all .15s;line-height:1}
+.row-del:hover{color:var(--red);background:var(--red-bg)}
+.empty-state{text-align:center;padding:3rem 2rem;color:var(--ink3)}
+.empty-icon{font-size:36px;margin-bottom:12px;display:block;opacity:.4}
+
+/* Settings */
+.settings-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.5rem;margin-bottom:1.25rem;box-shadow:var(--shadow)}
+.settings-title{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);margin-bottom:1.25rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)}
+.tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;min-height:30px}
+.tag-item{display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:13px;color:var(--ink)}
+.tag-remove{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:16px;line-height:1;padding:0 1px}
+.tag-remove:hover{color:var(--red)}
+.tag-add-row{display:flex;gap:6px}
+.tag-add-row input{flex:1;padding:8px 12px;font-size:13px;font-family:var(--body);color:var(--ink);background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);outline:none}
+.tag-add-row input:focus{border-color:var(--accent)}
+.tag-add-btn{padding:8px 14px;font-size:13px;font-family:var(--display);font-weight:600;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:var(--r);cursor:pointer}
+.tag-add-btn:hover{background:#f5e0d0}
+.pw-fields{display:flex;flex-direction:column;gap:8px;max-width:300px}
+.pw-fields input{padding:9px 12px;font-size:14px;font-family:var(--body);color:var(--ink);background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);outline:none}
+.pw-fields input:focus{border-color:var(--accent)}
+.pw-msg{font-size:12px;margin-top:6px;min-height:16px}
+.pw-save{margin-top:8px;padding:9px 20px;font-size:13px;font-family:var(--display);font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:var(--r);cursor:pointer}
+.pw-save:hover{background:#a8501f}
+
+/* Password gate */
+#pw-gate{display:none;position:fixed;inset:0;background:rgba(26,25,22,.7);z-index:999;align-items:center;justify-content:center;padding:1.5rem;backdrop-filter:blur(3px)}
+#pw-gate.open{display:flex}
+.pw-card{background:var(--surface);border-radius:var(--r-lg);overflow:hidden;width:100%;max-width:340px;box-shadow:var(--shadow-lg);animation:popIn .25s ease}
+.pw-head{background:var(--ink);padding:1.5rem;text-align:center}
+.pw-head-icon{font-size:32px;margin-bottom:8px}
+.pw-head-title{font-family:var(--display);font-size:20px;font-weight:700;color:#fff}
+.pw-head-sub{font-size:12px;color:rgba(255,255,255,.5);margin-top:3px}
+.pw-body{padding:1.5rem}
+.pw-body input{width:100%;padding:11px 14px;font-size:16px;font-family:var(--body);color:var(--ink);background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--r);outline:none;letter-spacing:.15em;text-align:center;transition:all .2s}
+.pw-body input:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(196,98,45,.10)}
+.pw-body input.shake{animation:shake .35s ease;border-color:var(--red)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.pw-err{font-size:12px;color:var(--red);text-align:center;margin-top:6px;min-height:16px}
+.pw-btn{width:100%;margin-top:12px;padding:12px;font-family:var(--display);font-size:15px;font-weight:700;color:#fff;background:var(--ink);border:none;border-radius:var(--r);cursor:pointer;transition:background .15s}
+.pw-btn:hover{background:var(--accent)}
+.pw-hint{font-size:11px;color:var(--ink3);text-align:center;margin-top:10px}
+
+/* Photo modal */
+#photo-modal{display:none;position:fixed;inset:0;background:rgba(26,25,22,.85);z-index:9999;align-items:center;justify-content:center;padding:1.5rem}
+#photo-modal.open{display:flex}
+.pm-inner{position:relative}
+.pm-inner img{max-width:90vw;max-height:85vh;border-radius:8px;box-shadow:var(--shadow-lg);display:block}
+.pm-close{position:absolute;top:-12px;right:-12px;width:30px;height:30px;border-radius:50%;background:#fff;border:none;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow)}
+
+@media(max-width:700px){
+  .dash-sidebar{display:none}
+  .student-wrap{padding:1.5rem 1rem 4rem}
+  .chip-grid{grid-template-columns:1fr 1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .dash-main{padding:1rem}
+  table{display:block;overflow-x:auto}
+  .f-search{width:120px}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Setup banner (hidden once credentials are saved) ── -->
+<div id="setup-banner">
+  <strong>⚙ Supabase Setup</strong>
+  <input type="text" id="sb-url" placeholder="https://xxxx.supabase.co">
+  <input type="text" id="sb-key" placeholder="anon / public key">
+  <button onclick="saveCredentials()">Connect</button>
+  <span class="setup-err" id="sb-err">Could not connect — check URL and key.</span>
+</div>
+
+<!-- Loading overlay -->
+<div id="loader"><div class="spinner"></div></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ══════════ STUDENT VIEW ══════════ -->
+<div id="student-view">
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <div class="nav-dot"></div>
+      <span class="nav-title">SDW 2026</span>
+      <span class="nav-sub">· Attendance</span>
+    </div>
+    <div class="nav-right">
+      <button onclick="goToTeacher()">Teacher login →</button>
+    </div>
+  </nav>
+
+  <div class="student-wrap">
+    <!-- Progress -->
+    <div class="progress-track">
+      <div class="prog-step"><div class="prog-circle active" id="pc1"><span>1</span></div><div class="prog-line" id="pl1"></div></div>
+      <div class="prog-step"><div class="prog-circle" id="pc2"><span>2</span></div><div class="prog-line" id="pl2"></div></div>
+      <div class="prog-step"><div class="prog-circle" id="pc3"><span>3</span></div><div class="prog-line" id="pl3"></div></div>
+      <div class="prog-step"><div class="prog-circle" id="pc4"><span>4</span></div><div class="prog-line" id="pl4"></div></div>
+      <div class="prog-step"><div class="prog-circle" id="pc5"><span>5</span></div></div>
+    </div>
+
+    <!-- Step 1: Name -->
+    <div class="step active" id="step1">
+      <div class="step-header">
+        <div class="step-num">Step 1 of 5</div>
+        <div class="step-title">What's your name?</div>
+        <div class="step-sub">Enter your full name as registered with the course.</div>
+      </div>
+      <div class="field">
+        <label class="fl" for="s-name">Full name</label>
+        <input type="text" id="s-name" placeholder="e.g. Alex Tan Wei Ming" autocomplete="name" oninput="validateStep1()">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-step1" onclick="goStep(2)" disabled>Continue →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Class -->
+    <div class="step" id="step2">
+      <div class="step-header">
+        <div class="step-num">Step 2 of 5</div>
+        <div class="step-title">Which class are you in?</div>
+        <div class="step-sub">Select the class group you're enrolled in.</div>
+      </div>
+      <div class="chip-grid" id="class-chips"></div>
+      <p class="chip-empty" id="class-empty" style="display:none">No classes configured. Ask the teacher to add classes in the dashboard.</p>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goStep(1)">← Back</button>
+        <button class="btn btn-primary" id="btn-step2" onclick="goStep(3)" disabled>Continue →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Lesson -->
+    <div class="step" id="step3">
+      <div class="step-header">
+        <div class="step-num">Step 3 of 5</div>
+        <div class="step-title">Which lesson today?</div>
+        <div class="step-sub">Select the session you're signing in for.</div>
+      </div>
+      <div class="chip-grid" id="lesson-chips"></div>
+      <p class="chip-empty" id="lesson-empty" style="display:none">No lessons configured.</p>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goStep(2)">← Back</button>
+        <button class="btn btn-primary" id="btn-step3" onclick="goStep(4)" disabled>Continue →</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Uploads -->
+    <div class="step" id="step4">
+      <div class="step-header">
+        <div class="step-num">Step 4 of 5</div>
+        <div class="step-title">Upload files</div>
+        <div class="step-sub">Both uploads are optional. Max 1 MB each.</div>
+      </div>
+
+      <div class="field">
+        <span class="upload-optional">Optional</span>
+        <label class="fl">Photo of your face</label>
+        <div class="upload-zone" id="zone-photo">
+          <input type="file" id="file-photo" accept="image/*" capture="user" onchange="handleFile('photo',this)">
+          <span class="upload-icon">📷</span>
+          <div class="upload-title">Take or upload a photo</div>
+          <div class="upload-sub">JPG, PNG, WEBP · max 1 MB</div>
+        </div>
+        <div class="upload-error" id="err-photo">File exceeds 1 MB. Please choose a smaller image.</div>
+        <div class="upload-preview" id="prev-photo">
+          <img id="prev-photo-img" class="preview-thumb" src="" alt="">
+          <div style="flex:1;overflow:hidden">
+            <div class="preview-name" id="prev-photo-name"></div>
+            <div class="preview-size" id="prev-photo-size"></div>
+          </div>
+          <button class="preview-remove" onclick="clearFile('photo')">×</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="upload-optional">Optional · absence document</span>
+        <label class="fl">Supporting document</label>
+        <div class="upload-zone" id="zone-doc">
+          <input type="file" id="file-doc" accept=".pdf,image/*,.doc,.docx" onchange="handleFile('doc',this)">
+          <span class="upload-icon">📎</span>
+          <div class="upload-title">Upload an absence document</div>
+          <div class="upload-sub">PDF, image, or Word · max 1 MB</div>
+        </div>
+        <div class="upload-error" id="err-doc">File exceeds 1 MB. Please choose a smaller file.</div>
+        <div class="upload-preview" id="prev-doc">
+          <div class="preview-doc-icon">📄</div>
+          <div style="flex:1;overflow:hidden">
+            <div class="preview-name" id="prev-doc-name"></div>
+            <div class="preview-size" id="prev-doc-size"></div>
+          </div>
+          <button class="preview-remove" onclick="clearFile('doc')">×</button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goStep(3)">← Back</button>
+        <button class="btn btn-primary" onclick="goStep(5)">Review →</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Review -->
+    <div class="step" id="step5">
+      <div class="step-header">
+        <div class="step-num">Step 5 of 5</div>
+        <div class="step-title">Review & submit</div>
+        <div class="step-sub">Check your details before submitting.</div>
+      </div>
+      <div class="review-card" id="review-card"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goStep(4)">← Back</button>
+        <button class="btn btn-green" id="btn-submit" onclick="submitAttendance()">Submit attendance ✓</button>
+      </div>
+    </div>
+
+    <!-- Confirmation -->
+    <div class="step" id="step-confirm">
+      <div class="confirm-wrap">
+        <div class="confirm-check">
+          <svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>
+        </div>
+        <div class="confirm-name" id="conf-name"></div>
+        <div class="confirm-detail" id="conf-detail"></div>
+        <div class="confirm-time" id="conf-time"></div>
+      </div>
+      <div class="btn-row" style="justify-content:center;margin-top:2rem">
+        <button class="btn btn-ghost" onclick="resetStudent()" style="flex:0;min-width:180px">Submit another →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TEACHER VIEW ══════════ -->
+<div id="teacher-view">
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <div class="nav-dot"></div>
+      <span class="nav-title">SDW 2026</span>
+      <span class="nav-sub">· Teacher Dashboard</span>
+    </div>
+    <div class="nav-right">
+      <button onclick="signOut()">← Student view</button>
+    </div>
+  </nav>
+
+  <div class="dash-wrap">
+    <aside class="dash-sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">View</div>
+        <button class="sidebar-item active" id="sn-records" onclick="showPanel('records')"><span class="si-icon">📋</span> Records</button>
+        <button class="sidebar-item" id="sn-settings" onclick="showPanel('settings')"><span class="si-icon">⚙️</span> Settings</button>
+      </div>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-signout"><button onclick="signOut()">Sign out</button></div>
+    </aside>
+
+    <main class="dash-main" id="panel-records">
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="table-toolbar">
+        <div class="toolbar-title">Submissions</div>
+        <div class="filter-group">
+          <input class="f-search" type="text" id="f-search" placeholder="Search name…" oninput="renderTable()">
+          <select class="f-select" id="f-class" onchange="renderTable()"><option value="">All classes</option></select>
+          <select class="f-select" id="f-lesson" onchange="renderTable()"><option value="">All lessons</option></select>
+          <select class="f-select" id="f-date" onchange="renderTable()"><option value="">All dates</option></select>
+          <button class="f-btn btn-refresh" onclick="refreshDashboard()">↻ Refresh</button>
+          <button class="f-btn btn-export" onclick="exportCSV()">↓ Export CSV</button>
+        </div>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th><th>Class</th><th>Lesson</th>
+              <th>Date</th><th>Time</th><th>Photo</th><th>Document</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="att-tbody"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <main class="dash-main" id="panel-settings" style="display:none">
+      <div class="settings-section">
+        <div class="settings-title">Classes</div>
+        <div class="tag-list" id="cls-tag-list"></div>
+        <div class="tag-add-row">
+          <input type="text" id="new-class" placeholder="e.g. Y1 Group A" onkeydown="if(event.key==='Enter')addTag('class')">
+          <button class="tag-add-btn" onclick="addTag('class')">+ Add</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-title">Lessons</div>
+        <div class="tag-list" id="les-tag-list"></div>
+        <div class="tag-add-row">
+          <input type="text" id="new-lesson" placeholder="e.g. Week 5 — 3D Axonometric" onkeydown="if(event.key==='Enter')addTag('lesson')">
+          <button class="tag-add-btn" onclick="addTag('lesson')">+ Add</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-title">Change password</div>
+        <div class="pw-fields">
+          <input type="password" id="pw-new" placeholder="New password">
+          <input type="password" id="pw-confirm" placeholder="Confirm password">
+        </div>
+        <div class="pw-msg" id="pw-msg"></div>
+        <button class="pw-save" onclick="changePW()">Update password</button>
+      </div>
+      <div class="settings-section" style="border-color:var(--red-border)">
+        <div class="settings-title" style="color:var(--red)">Danger zone</div>
+        <p style="font-size:13px;color:var(--ink2);margin-bottom:1rem">Permanently delete all submission records from the database.</p>
+        <button onclick="clearAllData()" style="padding:9px 18px;font-size:13px;font-family:var(--display);font-weight:600;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--r);cursor:pointer">Delete all records</button>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Password gate -->
+<div id="pw-gate" role="dialog" aria-modal="true">
+  <div class="pw-card">
+    <div class="pw-head">
+      <div class="pw-head-icon">🔐</div>
+      <div class="pw-head-title">Teacher access</div>
+      <div class="pw-head-sub">SDW 2026 · Attendance Dashboard</div>
+    </div>
+    <div class="pw-body">
+      <input type="password" id="pw-input" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')submitPW()"
+        oninput="document.getElementById('pw-err').textContent=''">
+      <div class="pw-err" id="pw-err"></div>
+      <button class="pw-btn" onclick="submitPW()">Enter dashboard →</button>
+      <div class="pw-hint" id="pw-hint">Default password: <strong>teacher2026</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- Photo modal -->
+<div id="photo-modal" onclick="closePhoto()">
+  <div class="pm-inner" onclick="event.stopPropagation()">
+    <img id="modal-img" src="" alt="Student photo">
+    <button class="pm-close" onclick="closePhoto()">×</button>
+  </div>
+</div>
+
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIGURATION
+// ══════════════════════════════════════════════
+const CREDS_KEY = 'sdw_sb_creds';
+let sb = null; // Supabase client
+
+function loadCreds() {
+  try { return JSON.parse(localStorage.getItem(CREDS_KEY) || 'null'); } catch { return null; }
+}
+
+async function saveCredentials() {
+  const url = document.getElementById('sb-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('sb-key').value.trim();
+  const errEl = document.getElementById('sb-err');
+  errEl.style.display = 'none';
+  if (!url || !key) { errEl.textContent = 'Both URL and key are required.'; errEl.style.display = ''; return; }
+  setLoading(true);
+  try {
+    const client = supabase.createClient(url, key);
+    // Test connection
+    const { error } = await client.from('att_config').select('id').limit(1);
+    if (error) throw error;
+    localStorage.setItem(CREDS_KEY, JSON.stringify({ url, key }));
+    sb = client;
+    document.getElementById('setup-banner').style.display = 'none';
+    toast('Connected to Supabase ✓');
+    await initConfig();
+  } catch (e) {
+    errEl.textContent = 'Could not connect — check URL and key. Is the SQL schema applied?';
+    errEl.style.display = '';
+  }
+  setLoading(false);
+}
+
+async function initClient() {
+  const creds = loadCreds();
+  if (!creds) return;
+  sb = supabase.createClient(creds.url, creds.key);
+  document.getElementById('setup-banner').style.display = 'none';
+  // Pre-fill for re-config
+  document.getElementById('sb-url').value = creds.url;
+  document.getElementById('sb-key').value = creds.key;
+  await initConfig();
+}
+
+// ══════════════════════════════════════════════
+//  HASH
+// ══════════════════════════════════════════════
+function hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+  return (h >>> 0).toString(16);
+}
+
+// ══════════════════════════════════════════════
+//  CONFIG (Supabase att_config)
+// ══════════════════════════════════════════════
+let cfg = { classes: [], lessons: [], pw_hash: '' };
+
+async function initConfig() {
+  if (!sb) return;
+  const { data, error } = await sb.from('att_config').select('*').eq('id', 1).single();
+  if (!error && data) cfg = data;
+}
+
+async function saveConfig() {
+  if (!sb) return;
+  await sb.from('att_config').update({ classes: cfg.classes, lessons: cfg.lessons, pw_hash: cfg.pw_hash }).eq('id', 1);
+}
+
+// ══════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════
+function setLoading(on) {
+  document.getElementById('loader').classList.toggle('on', on);
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ══════════════════════════════════════════════
+//  STUDENT FLOW
+// ══════════════════════════════════════════════
+let currentStep = 1;
+let fd = { name: '', cls: '', lesson: '', photoFile: null, photoPreview: '', photoName: '', docFile: null, docName: '' };
+
+function validateStep1() {
+  document.getElementById('btn-step1').disabled = document.getElementById('s-name').value.trim().length < 2;
+}
+document.getElementById('s-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.value.trim().length >= 2) goStep(2);
+});
+
+function buildChips(gridId, emptyId, items, key) {
+  const grid = document.getElementById(gridId);
+  const empty = document.getElementById(emptyId);
+  if (!items || !items.length) { grid.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  grid.innerHTML = items.map(item =>
+    `<button class="chip${fd[key]===item?' selected':''}" onclick="selectChip('${key}','${esc(item)}',this)">${esc(item)}</button>`
+  ).join('');
+}
+
+function selectChip(key, val, btn) {
+  fd[key] = val;
+  btn.closest('.chip-grid').querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  btn.classList.add('selected');
+  if (key === 'cls') document.getElementById('btn-step2').disabled = false;
+  if (key === 'lesson') document.getElementById('btn-step3').disabled = false;
+}
+
+function goStep(n) {
+  if (n > currentStep) {
+    if (currentStep === 1) {
+      const name = document.getElementById('s-name').value.trim();
+      if (name.length < 2) return;
+      fd.name = name;
+    }
+    if (currentStep === 2 && !fd.cls) return;
+    if (currentStep === 3 && !fd.lesson) return;
+  }
+  for (let i = 1; i <= 5; i++) {
+    const pc = document.getElementById('pc' + i);
+    pc.innerHTML = i < n ? '✓' : `<span>${i}</span>`;
+    pc.className = 'prog-circle' + (i < n ? ' done' : i === n ? ' active' : '');
+    if (i < 5) document.getElementById('pl' + i).className = 'prog-line' + (i < n ? ' done' : '');
+  }
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  if (n === 2) buildChips('class-chips', 'class-empty', cfg.classes, 'cls');
+  if (n === 3) buildChips('lesson-chips', 'lesson-empty', cfg.lessons, 'lesson');
+  if (n === 5) buildReview();
+  const el = document.getElementById(n <= 5 ? 'step' + n : 'step-confirm');
+  if (el) el.classList.add('active');
+  currentStep = n;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── File uploads ──
+function handleFile(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('err-' + type);
+  errEl.classList.remove('show');
+  if (file.size > 1024 * 1024) { errEl.classList.add('show'); input.value = ''; return; }
+  if (type === 'photo') {
+    fd.photoFile = file; fd.photoName = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+      fd.photoPreview = e.target.result;
+      document.getElementById('prev-photo-img').src = e.target.result;
+      document.getElementById('prev-photo-name').textContent = file.name;
+      document.getElementById('prev-photo-size').textContent = fmtSize(file.size);
+      document.getElementById('prev-photo').classList.add('show');
+    };
+    reader.readAsDataURL(file);
+  } else {
+    fd.docFile = file; fd.docName = file.name;
+    document.getElementById('prev-doc-name').textContent = file.name;
+    document.getElementById('prev-doc-size').textContent = fmtSize(file.size);
+    document.getElementById('prev-doc').classList.add('show');
+  }
+}
+
+function clearFile(type) {
+  if (type === 'photo') {
+    fd.photoFile = null; fd.photoPreview = ''; fd.photoName = '';
+    document.getElementById('prev-photo').classList.remove('show');
+    document.getElementById('file-photo').value = '';
+    document.getElementById('prev-photo-img').src = '';
+  } else {
+    fd.docFile = null; fd.docName = '';
+    document.getElementById('prev-doc').classList.remove('show');
+    document.getElementById('file-doc').value = '';
+  }
+}
+
+function fmtSize(b) { return b < 1024 ? b + 'B' : b < 1048576 ? (b/1024).toFixed(1) + 'KB' : (b/1048576).toFixed(1) + 'MB'; }
+
+// ── Review ──
+function buildReview() {
+  document.getElementById('review-card').innerHTML = `
+    <div class="review-row"><span class="review-label">Name</span><span class="review-val">${esc(fd.name)}</span></div>
+    <div class="review-row"><span class="review-label">Class</span><span class="review-val">${esc(fd.cls)}</span></div>
+    <div class="review-row"><span class="review-label">Lesson</span><span class="review-val">${esc(fd.lesson)}</span></div>
+    <div class="review-row"><span class="review-label">Photo</span><span class="review-val">
+      ${fd.photoPreview ? `<img src="${fd.photoPreview}" class="review-thumb" alt="Your photo">` : '<span style="color:var(--ink3);font-size:13px">Not uploaded</span>'}
+    </span></div>
+    <div class="review-row"><span class="review-label">Document</span><span class="review-val">
+      ${fd.docFile ? `<span class="review-file-badge">📎 ${esc(fd.docName)}</span>` : '<span style="color:var(--ink3);font-size:13px">Not uploaded</span>'}
+    </span></div>`;
+}
+
+// ── Submit to Supabase ──
+async function submitAttendance() {
+  if (!sb) { toast('Not connected to Supabase.', 'error'); return; }
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  setLoading(true);
+
+  try {
+    let photo_url = null, doc_url = null;
+    const ts = Date.now();
+
+    // Upload photo
+    if (fd.photoFile) {
+      const ext = fd.photoFile.name.split('.').pop();
+      const path = `photos/${ts}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { data: ud, error: ue } = await sb.storage.from('attendance-files').upload(path, fd.photoFile, { contentType: fd.photoFile.type });
+      if (ue) throw ue;
+      const { data: pu } = sb.storage.from('attendance-files').getPublicUrl(path);
+      photo_url = pu.publicUrl;
+    }
+
+    // Upload document
+    if (fd.docFile) {
+      const ext = fd.docFile.name.split('.').pop();
+      const path = `docs/${ts}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: de } = await sb.storage.from('attendance-files').upload(path, fd.docFile, { contentType: fd.docFile.type });
+      if (de) throw de;
+      const { data: du } = sb.storage.from('attendance-files').getPublicUrl(path);
+      doc_url = du.publicUrl;
+    }
+
+    // Insert record
+    const { data, error } = await sb.from('att_submissions').insert({
+      name: fd.name,
+      class: fd.cls,
+      lesson: fd.lesson,
+      photo_url,
+      photo_name: fd.photoName || null,
+      doc_url,
+      doc_name: fd.docName || null
+    }).select().single();
+    if (error) throw error;
+
+    const now = new Date(data.submitted_at);
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step-confirm').classList.add('active');
+    document.getElementById('conf-name').textContent = fd.name;
+    document.getElementById('conf-detail').textContent = `${fd.cls} · ${fd.lesson}`;
+    document.getElementById('conf-time').textContent =
+      now.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) + ' at ' +
+      now.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    for (let i = 1; i <= 5; i++) { document.getElementById('pc'+i).className='prog-circle done'; document.getElementById('pc'+i).innerHTML='✓'; }
+    for (let i = 1; i <= 4; i++) document.getElementById('pl'+i).className='prog-line done';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  } catch (e) {
+    toast('Submission failed: ' + (e.message || 'Unknown error'), 'error');
+    btn.disabled = false;
+  }
+  setLoading(false);
+}
+
+function resetStudent() {
+  fd = { name: '', cls: '', lesson: '', photoFile: null, photoPreview: '', photoName: '', docFile: null, docName: '' };
+  document.getElementById('s-name').value = '';
+  clearFile('photo'); clearFile('doc');
+  document.getElementById('btn-step1').disabled = true;
+  document.getElementById('btn-step2').disabled = true;
+  document.getElementById('btn-step3').disabled = true;
+  goStep(1);
+}
+
+// ══════════════════════════════════════════════
+//  TEACHER AUTH
+// ══════════════════════════════════════════════
+function goToTeacher() {
+  if (!sb) { toast('Connect to Supabase first.', 'error'); return; }
+  document.getElementById('pw-gate').classList.add('open');
+  document.getElementById('pw-input').value = '';
+  document.getElementById('pw-err').textContent = '';
+  const hasCustomPW = cfg.pw_hash && cfg.pw_hash.length > 0;
+  document.getElementById('pw-hint').style.display = hasCustomPW ? 'none' : '';
+  setTimeout(() => document.getElementById('pw-input').focus(), 80);
+}
+
+async function submitPW() {
+  const val = document.getElementById('pw-input').value;
+  const storedHash = cfg.pw_hash || '';
+  const defaultHash = hashStr('teacher2026');
+  const valid = storedHash === '' ? val === 'teacher2026' : hashStr(val) === storedHash;
+  if (valid) {
+    // If using default, set the hash now
+    if (storedHash === '') { cfg.pw_hash = defaultHash; await saveConfig(); }
+    document.getElementById('pw-gate').classList.remove('open');
+    document.getElementById('student-view').style.display = 'none';
+    document.getElementById('teacher-view').style.display = 'block';
+    showPanel('records');
+  } else {
+    const inp = document.getElementById('pw-input');
+    inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake');
+    document.getElementById('pw-err').textContent = 'Incorrect password.';
+    inp.value = ''; inp.focus();
+  }
+}
+
+document.getElementById('pw-gate').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.getElementById('pw-gate').classList.remove('open'); closePhoto(); } });
+
+function signOut() {
+  document.getElementById('teacher-view').style.display = 'none';
+  document.getElementById('student-view').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════
+//  DASHBOARD DATA
+// ══════════════════════════════════════════════
+let allSubs = [];
+
+async function fetchSubs() {
+  if (!sb) return;
+  setLoading(true);
+  const { data, error } = await sb.from('att_submissions').select('*').order('submitted_at', { ascending: false });
+  if (!error && data) allSubs = data;
+  setLoading(false);
+}
+
+async function refreshDashboard() {
+  await fetchSubs();
+  renderStats();
+  buildFilters();
+  renderTable();
+  toast('Refreshed');
+}
+
+function showPanel(name) {
+  document.getElementById('panel-records').style.display = name === 'records' ? '' : 'none';
+  document.getElementById('panel-settings').style.display = name === 'settings' ? '' : 'none';
+  document.getElementById('sn-records').className = 'sidebar-item' + (name === 'records' ? ' active' : '');
+  document.getElementById('sn-settings').className = 'sidebar-item' + (name === 'settings' ? ' active' : '');
+  if (name === 'records') { fetchSubs().then(() => { renderStats(); buildFilters(); renderTable(); }); }
+  if (name === 'settings') renderTagLists();
+}
+
+// ── Stats ──
+function renderStats() {
+  const today = new Date().toISOString().split('T')[0];
+  const todaySubs = allSubs.filter(s => s.submitted_at.startsWith(today));
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total submissions</div><div class="stat-val">${allSubs.length}</div><div class="stat-sub">All time</div></div>
+    <div class="stat-card"><div class="stat-label">Today</div><div class="stat-val" style="color:var(--accent)">${todaySubs.length}</div><div class="stat-sub">${new Date().toLocaleDateString('en-SG',{day:'numeric',month:'short'})}</div></div>
+    <div class="stat-card"><div class="stat-label">With photos</div><div class="stat-val" style="color:var(--green)">${allSubs.filter(s=>s.photo_url).length}</div><div class="stat-sub">Face photos</div></div>
+    <div class="stat-card"><div class="stat-label">With documents</div><div class="stat-val" style="color:var(--blue)">${allSubs.filter(s=>s.doc_url).length}</div><div class="stat-sub">Absence docs</div></div>`;
+}
+
+// ── Filters ──
+function buildFilters() {
+  const curCls = document.getElementById('f-class').value;
+  const curLes = document.getElementById('f-lesson').value;
+  const curDt = document.getElementById('f-date').value;
+  const classes = [...new Set(allSubs.map(s => s.class))].filter(Boolean).sort();
+  const lessons = [...new Set(allSubs.map(s => s.lesson))].filter(Boolean).sort();
+  const dates = [...new Set(allSubs.map(s => s.submitted_at.split('T')[0]))].filter(Boolean).sort().reverse();
+  const cls = document.getElementById('f-class');
+  const les = document.getElementById('f-lesson');
+  const dt = document.getElementById('f-date');
+  cls.innerHTML = '<option value="">All classes</option>' + classes.map(c => `<option value="${esc(c)}"${c===curCls?' selected':''}>${esc(c)}</option>`).join('');
+  les.innerHTML = '<option value="">All lessons</option>' + lessons.map(l => `<option value="${esc(l)}"${l===curLes?' selected':''}>${esc(l)}</option>`).join('');
+  dt.innerHTML = '<option value="">All dates</option>' + dates.map(d => {
+    const label = new Date(d + 'T00:00:00').toLocaleDateString('en-SG', { day:'numeric', month:'short', year:'numeric' });
+    return `<option value="${d}"${d===curDt?' selected':''}>${label}</option>`;
+  }).join('');
+}
+
+// ── Table ──
+function renderTable() {
+  const search = (document.getElementById('f-search').value || '').toLowerCase();
+  const fCls = document.getElementById('f-class').value;
+  const fLes = document.getElementById('f-lesson').value;
+  const fDt = document.getElementById('f-date').value;
+  let subs = allSubs;
+  if (search) subs = subs.filter(s => s.name.toLowerCase().includes(search));
+  if (fCls) subs = subs.filter(s => s.class === fCls);
+  if (fLes) subs = subs.filter(s => s.lesson === fLes);
+  if (fDt) subs = subs.filter(s => s.submitted_at.startsWith(fDt));
+  const tbody = document.getElementById('att-tbody');
+  if (!subs.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><span class="empty-icon">📋</span><div>No submissions found.</div></div></td></tr>`;
+    return;
+  }
+  const ini = n => n.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
+  tbody.innerHTML = subs.map(s => {
+    const dt = new Date(s.submitted_at);
+    const date = dt.toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' });
+    const time = dt.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const avatar = s.photo_url
+      ? `<img class="avatar-thumb" src="${esc(s.photo_url)}" alt="${esc(s.name)}" onclick="openPhoto('${esc(s.photo_url)}')" title="View photo">`
+      : `<div class="avatar-ini">${ini(s.name)}</div>`;
+    const photoCell = s.photo_url
+      ? `<img src="${esc(s.photo_url)}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;cursor:pointer;border:1px solid var(--border)" onclick="openPhoto('${esc(s.photo_url)}')" title="View">`
+      : `<span class="no-file">—</span>`;
+    const docCell = s.doc_url
+      ? `<a class="doc-link" href="${esc(s.doc_url)}" target="_blank" rel="noopener">📎 View</a>`
+      : `<span class="no-file">—</span>`;
+    return `<tr>
+      <td><div class="td-name">${avatar}<span class="td-name-text">${esc(s.name)}</span></div></td>
+      <td><span class="badge badge-class">${esc(s.class)}</span></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.lesson)}">${esc(s.lesson)}</td>
+      <td><span class="time-mono">${date}</span></td>
+      <td><span class="time-mono">${time}</span></td>
+      <td>${photoCell}</td>
+      <td>${docCell}</td>
+      <td><button class="row-del" onclick="deleteRow('${s.id}')" title="Delete">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function deleteRow(id) {
+  if (!confirm('Delete this submission?')) return;
+  setLoading(true);
+  const sub = allSubs.find(s => s.id === id);
+  // Delete storage files
+  if (sub) {
+    const toDelete = [];
+    if (sub.photo_url) toDelete.push(sub.photo_url.split('/attendance-files/')[1]);
+    if (sub.doc_url) toDelete.push(sub.doc_url.split('/attendance-files/')[1]);
+    if (toDelete.length) await sb.storage.from('attendance-files').remove(toDelete.filter(Boolean));
+  }
+  const { error } = await sb.from('att_submissions').delete().eq('id', id);
+  if (!error) {
+    allSubs = allSubs.filter(s => s.id !== id);
+    renderStats(); buildFilters(); renderTable();
+    toast('Record deleted');
+  } else {
+    toast('Delete failed', 'error');
+  }
+  setLoading(false);
+}
+
+function exportCSV() {
+  if (!allSubs.length) { toast('No data to export', 'error'); return; }
+  const header = 'Name,Class,Lesson,Date,Time,HasPhoto,HasDocument,Photo URL,Doc URL';
+  const rows = allSubs.map(s => {
+    const dt = new Date(s.submitted_at);
+    return [
+      `"${s.name}"`, `"${s.class}"`, `"${s.lesson}"`,
+      dt.toLocaleDateString('en-SG'), dt.toLocaleTimeString('en-SG'),
+      s.photo_url ? 'Yes' : 'No', s.doc_url ? 'Yes' : 'No',
+      s.photo_url || '', s.doc_url || ''
+    ].join(',');
+  });
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([header, ...rows].join('\n'));
+  a.download = 'sdw2026-attendance.csv';
+  a.click();
+}
+
+// ── Photo modal ──
+function openPhoto(url) {
+  document.getElementById('modal-img').src = url;
+  document.getElementById('photo-modal').classList.add('open');
+}
+function closePhoto() { document.getElementById('photo-modal').classList.remove('open'); }
+
+// ══════════════════════════════════════════════
+//  SETTINGS
+// ══════════════════════════════════════════════
+function renderTagLists() {
+  renderTags('cls-tag-list', cfg.classes || [], 'class');
+  renderTags('les-tag-list', cfg.lessons || [], 'lesson');
+}
+
+function renderTags(id, items, type) {
+  const wrap = document.getElementById(id);
+  if (!items.length) { wrap.innerHTML = '<span style="font-size:13px;color:var(--ink3)">None added yet.</span>'; return; }
+  wrap.innerHTML = items.map((item, i) =>
+    `<div class="tag-item">${esc(item)}<button class="tag-remove" onclick="removeTag('${type}',${i})">×</button></div>`
+  ).join('');
+}
+
+async function addTag(type) {
+  const key = type === 'class' ? 'new-class' : 'new-lesson';
+  const val = document.getElementById(key).value.trim();
+  if (!val) return;
+  const arr = type === 'class' ? 'classes' : 'lessons';
+  if (!cfg[arr]) cfg[arr] = [];
+  if (cfg[arr].includes(val)) { document.getElementById(key).select(); return; }
+  cfg[arr].push(val);
+  await saveConfig();
+  document.getElementById(key).value = '';
+  renderTagLists();
+  toast(`${type === 'class' ? 'Class' : 'Lesson'} added`);
+}
+
+async function removeTag(type, idx) {
+  const arr = type === 'class' ? 'classes' : 'lessons';
+  cfg[arr].splice(idx, 1);
+  await saveConfig();
+  renderTagLists();
+}
+
+async function changePW() {
+  const np = document.getElementById('pw-new').value;
+  const nc = document.getElementById('pw-confirm').value;
+  const msg = document.getElementById('pw-msg');
+  if (!np) { msg.style.color = 'var(--red)'; msg.textContent = 'Enter a new password.'; return; }
+  if (np.length < 4) { msg.style.color = 'var(--red)'; msg.textContent = 'Minimum 4 characters.'; return; }
+  if (np !== nc) { msg.style.color = 'var(--red)'; msg.textContent = 'Passwords do not match.'; return; }
+  cfg.pw_hash = hashStr(np);
+  await saveConfig();
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+  msg.style.color = 'var(--green)'; msg.textContent = 'Password updated ✓';
+  document.getElementById('pw-hint').style.display = 'none';
+  setTimeout(() => msg.textContent = '', 3000);
+}
+
+async function clearAllData() {
+  if (!confirm('Delete ALL attendance records from the database? This cannot be undone.')) return;
+  setLoading(true);
+  // Delete all storage files
+  const paths = allSubs.flatMap(s => {
+    const arr = [];
+    if (s.photo_url) { const p = s.photo_url.split('/attendance-files/')[1]; if (p) arr.push(p); }
+    if (s.doc_url) { const p = s.doc_url.split('/attendance-files/')[1]; if (p) arr.push(p); }
+    return arr;
+  });
+  if (paths.length) await sb.storage.from('attendance-files').remove(paths);
+  await sb.from('att_submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  allSubs = [];
+  renderStats(); renderTable(); buildFilters();
+  toast('All records deleted');
+  setLoading(false);
+}
+
+// ══════════════════════════════════════════════
+//  UTIL
+// ══════════════════════════════════════════════
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+initClient();
+</script>
+</body>
+</html>
