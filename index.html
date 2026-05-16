@@ -284,12 +284,16 @@ tbody td:first-child{padding-left:16px}
     <div class="step active" id="step1">
       <div class="step-header">
         <div class="step-num">Step 1 of 5</div>
-        <div class="step-title">What's your name?</div>
-        <div class="step-sub">Enter your full name as registered with the course.</div>
+        <div class="step-title">Who are you?</div>
+        <div class="step-sub">Enter your details as registered with the course.</div>
       </div>
       <div class="field">
         <label class="fl" for="s-name">Full name</label>
         <input type="text" id="s-name" placeholder="e.g. Alex Tan Wei Ming" autocomplete="name" oninput="validateStep1()">
+      </div>
+      <div class="field">
+        <label class="fl" for="s-sid">Student ID</label>
+        <input type="text" id="s-sid" placeholder="e.g. 1006789" autocomplete="off" oninput="validateStep1()">
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-step1" onclick="goStep(2)" disabled>Continue →</button>
@@ -452,7 +456,7 @@ tbody td:first-child{padding-left:16px}
         <table>
           <thead>
             <tr>
-              <th>Student</th><th>Class</th><th>Lesson</th>
+              <th>Student</th><th>Student ID</th><th>Class</th><th>Lesson</th>
               <th>Date</th><th>Time</th><th>Photo</th><th>Document</th><th></th>
             </tr>
           </thead>
@@ -523,14 +527,12 @@ tbody td:first-child{padding-left:16px}
   </div>
 </div>
 
-
 <script>
 // ══════════════════════════════════════════════
 //  SUPABASE CONNECTION
 // ══════════════════════════════════════════════
 const SUPABASE_URL = 'https://weezccpgodrtrglxuqhp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlZXpjY3Bnb2RydHJnbHh1cWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MTQ4MzIsImV4cCI6MjA5NDQ5MDgzMn0.g2YOvH14CWrJauWuuc_jlsGAqojdjh_PtCTwJGGkIak';
-
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -544,18 +546,16 @@ function hashStr(s) {
 }
 
 // ══════════════════════════════════════════════
-//  CONFIG (Supabase att_config)
+//  CONFIG
 // ══════════════════════════════════════════════
 let cfg = { classes: [], lessons: [], pw_hash: '' };
 
 async function initConfig() {
-  if (!sb) return;
   const { data, error } = await sb.from('att_config').select('*').eq('id', 1).single();
   if (!error && data) cfg = data;
 }
 
 async function saveConfig() {
-  if (!sb) return;
   await sb.from('att_config').update({ classes: cfg.classes, lessons: cfg.lessons, pw_hash: cfg.pw_hash }).eq('id', 1);
 }
 
@@ -579,13 +579,18 @@ function toast(msg, type = '') {
 //  STUDENT FLOW
 // ══════════════════════════════════════════════
 let currentStep = 1;
-let fd = { name: '', cls: '', lesson: '', photoFile: null, photoPreview: '', photoName: '', docFile: null, docName: '' };
+let fd = { name: '', sid: '', cls: '', lesson: '', photoFile: null, photoPreview: '', photoName: '', docFile: null, docName: '' };
 
 function validateStep1() {
-  document.getElementById('btn-step1').disabled = document.getElementById('s-name').value.trim().length < 2;
+  const name = document.getElementById('s-name').value.trim();
+  const sid  = document.getElementById('s-sid').value.trim();
+  document.getElementById('btn-step1').disabled = name.length < 2 || sid.length < 1;
 }
 document.getElementById('s-name').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.value.trim().length >= 2) goStep(2);
+  if (e.key === 'Enter') document.getElementById('s-sid').focus();
+});
+document.getElementById('s-sid').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('s-name').value.trim().length >= 2 && e.target.value.trim().length >= 1) goStep(2);
 });
 
 function buildChips(gridId, emptyId, items, key) {
@@ -610,8 +615,10 @@ function goStep(n) {
   if (n > currentStep) {
     if (currentStep === 1) {
       const name = document.getElementById('s-name').value.trim();
-      if (name.length < 2) return;
+      const sid  = document.getElementById('s-sid').value.trim();
+      if (name.length < 2 || sid.length < 1) return;
       fd.name = name;
+      fd.sid  = sid;
     }
     if (currentStep === 2 && !fd.cls) return;
     if (currentStep === 3 && !fd.lesson) return;
@@ -671,12 +678,13 @@ function clearFile(type) {
   }
 }
 
-function fmtSize(b) { return b < 1024 ? b + 'B' : b < 1048576 ? (b/1024).toFixed(1) + 'KB' : (b/1048576).toFixed(1) + 'MB'; }
+function fmtSize(b) { return b < 1024 ? b+'B' : b < 1048576 ? (b/1024).toFixed(1)+'KB' : (b/1048576).toFixed(1)+'MB'; }
 
 // ── Review ──
 function buildReview() {
   document.getElementById('review-card').innerHTML = `
     <div class="review-row"><span class="review-label">Name</span><span class="review-val">${esc(fd.name)}</span></div>
+    <div class="review-row"><span class="review-label">Student ID</span><span class="review-val">${esc(fd.sid)}</span></div>
     <div class="review-row"><span class="review-label">Class</span><span class="review-val">${esc(fd.cls)}</span></div>
     <div class="review-row"><span class="review-label">Lesson</span><span class="review-val">${esc(fd.lesson)}</span></div>
     <div class="review-row"><span class="review-label">Photo</span><span class="review-val">
@@ -689,7 +697,6 @@ function buildReview() {
 
 // ── Submit to Supabase ──
 async function submitAttendance() {
-  if (!sb) { toast('Not connected to Supabase.', 'error'); return; }
   const btn = document.getElementById('btn-submit');
   btn.disabled = true;
   setLoading(true);
@@ -697,15 +704,17 @@ async function submitAttendance() {
   try {
     let photo_url = null, doc_url = null;
     const ts = Date.now();
+    console.log('Submitting:', fd.name, '| Photo:', !!fd.photoFile, '| Doc:', !!fd.docFile);
 
     // Upload photo
     if (fd.photoFile) {
       const ext = fd.photoFile.name.split('.').pop();
       const path = `photos/${ts}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { data: ud, error: ue } = await sb.storage.from('attendance-files').upload(path, fd.photoFile, { contentType: fd.photoFile.type });
-      if (ue) throw ue;
+      const { error: ue } = await sb.storage.from('attendance-files').upload(path, fd.photoFile, { contentType: fd.photoFile.type });
+      if (ue) { console.error('Photo upload error:', ue); throw ue; }
       const { data: pu } = sb.storage.from('attendance-files').getPublicUrl(path);
       photo_url = pu.publicUrl;
+      console.log('Photo uploaded ✓');
     }
 
     // Upload document
@@ -713,14 +722,16 @@ async function submitAttendance() {
       const ext = fd.docFile.name.split('.').pop();
       const path = `docs/${ts}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { error: de } = await sb.storage.from('attendance-files').upload(path, fd.docFile, { contentType: fd.docFile.type });
-      if (de) throw de;
+      if (de) { console.error('Doc upload error:', de); throw de; }
       const { data: du } = sb.storage.from('attendance-files').getPublicUrl(path);
       doc_url = du.publicUrl;
+      console.log('Doc uploaded ✓');
     }
 
     // Insert record
     const { data, error } = await sb.from('att_submissions').insert({
       name: fd.name,
+      student_id: fd.sid,
       class: fd.cls,
       lesson: fd.lesson,
       photo_url,
@@ -728,30 +739,35 @@ async function submitAttendance() {
       doc_url,
       doc_name: fd.docName || null
     }).select().single();
-    if (error) throw error;
+    if (error) { console.error('Insert error:', error); throw error; }
 
+    console.log('Submission successful ✓', data);
     const now = new Date(data.submitted_at);
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
     document.getElementById('step-confirm').classList.add('active');
     document.getElementById('conf-name').textContent = fd.name;
     document.getElementById('conf-detail').textContent = `${fd.cls} · ${fd.lesson}`;
     document.getElementById('conf-time').textContent =
-      now.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) + ' at ' +
-      now.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      now.toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' }) + ' at ' +
+      now.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
     for (let i = 1; i <= 5; i++) { document.getElementById('pc'+i).className='prog-circle done'; document.getElementById('pc'+i).innerHTML='✓'; }
     for (let i = 1; i <= 4; i++) document.getElementById('pl'+i).className='prog-line done';
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
   } catch (e) {
-    toast('Submission failed: ' + (e.message || 'Unknown error'), 'error');
+    console.error('Submission failed:', e);
+    toast('Submission failed: ' + (e.message || JSON.stringify(e) || 'Unknown error'), 'error');
+  } finally {
+    // Always re-enable button and hide loader regardless of success or failure
     btn.disabled = false;
+    setLoading(false);
   }
-  setLoading(false);
 }
 
 function resetStudent() {
-  fd = { name: '', cls: '', lesson: '', photoFile: null, photoPreview: '', photoName: '', docFile: null, docName: '' };
+  fd = { name: '', sid: '', cls: '', lesson: '', photoFile: null, photoPreview: '', photoName: '', docFile: null, docName: '' };
   document.getElementById('s-name').value = '';
+  document.getElementById('s-sid').value = '';
   clearFile('photo'); clearFile('doc');
   document.getElementById('btn-step1').disabled = true;
   document.getElementById('btn-step2').disabled = true;
@@ -774,11 +790,9 @@ function goToTeacher() {
 async function submitPW() {
   const val = document.getElementById('pw-input').value;
   const storedHash = cfg.pw_hash || '';
-  const defaultHash = hashStr('teacher2026');
   const valid = storedHash === '' ? val === 'teacher2026' : hashStr(val) === storedHash;
   if (valid) {
-    // If using default, set the hash now
-    if (storedHash === '') { cfg.pw_hash = defaultHash; await saveConfig(); }
+    if (storedHash === '') { cfg.pw_hash = hashStr('teacher2026'); await saveConfig(); }
     document.getElementById('pw-gate').classList.remove('open');
     document.getElementById('student-view').style.display = 'none';
     document.getElementById('teacher-view').style.display = 'block';
@@ -800,12 +814,11 @@ function signOut() {
 }
 
 // ══════════════════════════════════════════════
-//  DASHBOARD DATA
+//  DASHBOARD
 // ══════════════════════════════════════════════
 let allSubs = [];
 
 async function fetchSubs() {
-  if (!sb) return;
   setLoading(true);
   const { data, error } = await sb.from('att_submissions').select('*').order('submitted_at', { ascending: false });
   if (!error && data) allSubs = data;
@@ -814,9 +827,7 @@ async function fetchSubs() {
 
 async function refreshDashboard() {
   await fetchSubs();
-  renderStats();
-  buildFilters();
-  renderTable();
+  renderStats(); buildFilters(); renderTable();
   toast('Refreshed');
 }
 
@@ -825,11 +836,10 @@ function showPanel(name) {
   document.getElementById('panel-settings').style.display = name === 'settings' ? '' : 'none';
   document.getElementById('sn-records').className = 'sidebar-item' + (name === 'records' ? ' active' : '');
   document.getElementById('sn-settings').className = 'sidebar-item' + (name === 'settings' ? ' active' : '');
-  if (name === 'records') { fetchSubs().then(() => { renderStats(); buildFilters(); renderTable(); }); }
+  if (name === 'records') fetchSubs().then(() => { renderStats(); buildFilters(); renderTable(); });
   if (name === 'settings') renderTagLists();
 }
 
-// ── Stats ──
 function renderStats() {
   const today = new Date().toISOString().split('T')[0];
   const todaySubs = allSubs.filter(s => s.submitted_at.startsWith(today));
@@ -840,57 +850,44 @@ function renderStats() {
     <div class="stat-card"><div class="stat-label">With documents</div><div class="stat-val" style="color:var(--blue)">${allSubs.filter(s=>s.doc_url).length}</div><div class="stat-sub">Absence docs</div></div>`;
 }
 
-// ── Filters ──
 function buildFilters() {
   const curCls = document.getElementById('f-class').value;
   const curLes = document.getElementById('f-lesson').value;
-  const curDt = document.getElementById('f-date').value;
+  const curDt  = document.getElementById('f-date').value;
   const classes = [...new Set(allSubs.map(s => s.class))].filter(Boolean).sort();
   const lessons = [...new Set(allSubs.map(s => s.lesson))].filter(Boolean).sort();
-  const dates = [...new Set(allSubs.map(s => s.submitted_at.split('T')[0]))].filter(Boolean).sort().reverse();
-  const cls = document.getElementById('f-class');
-  const les = document.getElementById('f-lesson');
-  const dt = document.getElementById('f-date');
-  cls.innerHTML = '<option value="">All classes</option>' + classes.map(c => `<option value="${esc(c)}"${c===curCls?' selected':''}>${esc(c)}</option>`).join('');
-  les.innerHTML = '<option value="">All lessons</option>' + lessons.map(l => `<option value="${esc(l)}"${l===curLes?' selected':''}>${esc(l)}</option>`).join('');
-  dt.innerHTML = '<option value="">All dates</option>' + dates.map(d => {
-    const label = new Date(d + 'T00:00:00').toLocaleDateString('en-SG', { day:'numeric', month:'short', year:'numeric' });
+  const dates   = [...new Set(allSubs.map(s => s.submitted_at.split('T')[0]))].filter(Boolean).sort().reverse();
+  document.getElementById('f-class').innerHTML  = '<option value="">All classes</option>'  + classes.map(c=>`<option value="${esc(c)}"${c===curCls?' selected':''}>${esc(c)}</option>`).join('');
+  document.getElementById('f-lesson').innerHTML = '<option value="">All lessons</option>'  + lessons.map(l=>`<option value="${esc(l)}"${l===curLes?' selected':''}>${esc(l)}</option>`).join('');
+  document.getElementById('f-date').innerHTML   = '<option value="">All dates</option>'    + dates.map(d=>{
+    const label = new Date(d+'T00:00:00').toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'});
     return `<option value="${d}"${d===curDt?' selected':''}>${label}</option>`;
   }).join('');
 }
 
-// ── Table ──
 function renderTable() {
-  const search = (document.getElementById('f-search').value || '').toLowerCase();
+  const search = (document.getElementById('f-search').value||'').toLowerCase();
   const fCls = document.getElementById('f-class').value;
   const fLes = document.getElementById('f-lesson').value;
-  const fDt = document.getElementById('f-date').value;
+  const fDt  = document.getElementById('f-date').value;
   let subs = allSubs;
   if (search) subs = subs.filter(s => s.name.toLowerCase().includes(search));
-  if (fCls) subs = subs.filter(s => s.class === fCls);
-  if (fLes) subs = subs.filter(s => s.lesson === fLes);
-  if (fDt) subs = subs.filter(s => s.submitted_at.startsWith(fDt));
+  if (fCls)   subs = subs.filter(s => s.class === fCls);
+  if (fLes)   subs = subs.filter(s => s.lesson === fLes);
+  if (fDt)    subs = subs.filter(s => s.submitted_at.startsWith(fDt));
   const tbody = document.getElementById('att-tbody');
-  if (!subs.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><span class="empty-icon">📋</span><div>No submissions found.</div></div></td></tr>`;
-    return;
-  }
+  if (!subs.length) { tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><span class="empty-icon">📋</span><div>No submissions found.</div></div></td></tr>`; return; }
   const ini = n => n.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
   tbody.innerHTML = subs.map(s => {
-    const dt = new Date(s.submitted_at);
-    const date = dt.toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric' });
-    const time = dt.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-    const avatar = s.photo_url
-      ? `<img class="avatar-thumb" src="${esc(s.photo_url)}" alt="${esc(s.name)}" onclick="openPhoto('${esc(s.photo_url)}')" title="View photo">`
-      : `<div class="avatar-ini">${ini(s.name)}</div>`;
-    const photoCell = s.photo_url
-      ? `<img src="${esc(s.photo_url)}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;cursor:pointer;border:1px solid var(--border)" onclick="openPhoto('${esc(s.photo_url)}')" title="View">`
-      : `<span class="no-file">—</span>`;
-    const docCell = s.doc_url
-      ? `<a class="doc-link" href="${esc(s.doc_url)}" target="_blank" rel="noopener">📎 View</a>`
-      : `<span class="no-file">—</span>`;
+    const dt   = new Date(s.submitted_at);
+    const date = dt.toLocaleDateString('en-SG',{day:'2-digit',month:'short',year:'numeric'});
+    const time = dt.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const avatar    = s.photo_url ? `<img class="avatar-thumb" src="${esc(s.photo_url)}" alt="${esc(s.name)}" onclick="openPhoto('${esc(s.photo_url)}')" title="View photo">` : `<div class="avatar-ini">${ini(s.name)}</div>`;
+    const photoCell = s.photo_url ? `<img src="${esc(s.photo_url)}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;cursor:pointer;border:1px solid var(--border)" onclick="openPhoto('${esc(s.photo_url)}')" title="View">` : `<span class="no-file">—</span>`;
+    const docCell   = s.doc_url   ? `<a class="doc-link" href="${esc(s.doc_url)}" target="_blank" rel="noopener">📎 View</a>` : `<span class="no-file">—</span>`;
     return `<tr>
       <td><div class="td-name">${avatar}<span class="td-name-text">${esc(s.name)}</span></div></td>
+      <td><span class="time-mono">${esc(s.student_id||'—')}</span></td>
       <td><span class="badge badge-class">${esc(s.class)}</span></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.lesson)}">${esc(s.lesson)}</td>
       <td><span class="time-mono">${date}</span></td>
@@ -906,82 +903,65 @@ async function deleteRow(id) {
   if (!confirm('Delete this submission?')) return;
   setLoading(true);
   const sub = allSubs.find(s => s.id === id);
-  // Delete storage files
   if (sub) {
     const toDelete = [];
     if (sub.photo_url) toDelete.push(sub.photo_url.split('/attendance-files/')[1]);
-    if (sub.doc_url) toDelete.push(sub.doc_url.split('/attendance-files/')[1]);
+    if (sub.doc_url)   toDelete.push(sub.doc_url.split('/attendance-files/')[1]);
     if (toDelete.length) await sb.storage.from('attendance-files').remove(toDelete.filter(Boolean));
   }
   const { error } = await sb.from('att_submissions').delete().eq('id', id);
-  if (!error) {
-    allSubs = allSubs.filter(s => s.id !== id);
-    renderStats(); buildFilters(); renderTable();
-    toast('Record deleted');
-  } else {
-    toast('Delete failed', 'error');
-  }
+  if (!error) { allSubs = allSubs.filter(s => s.id !== id); renderStats(); buildFilters(); renderTable(); toast('Record deleted'); }
+  else toast('Delete failed', 'error');
   setLoading(false);
 }
 
 function exportCSV() {
-  if (!allSubs.length) { toast('No data to export', 'error'); return; }
-  const header = 'Name,Class,Lesson,Date,Time,HasPhoto,HasDocument,Photo URL,Doc URL';
+  if (!allSubs.length) { toast('No data to export','error'); return; }
+  const header = 'Name,Student ID,Class,Lesson,Date,Time,HasPhoto,HasDocument,Photo URL,Doc URL';
   const rows = allSubs.map(s => {
     const dt = new Date(s.submitted_at);
-    return [
-      `"${s.name}"`, `"${s.class}"`, `"${s.lesson}"`,
-      dt.toLocaleDateString('en-SG'), dt.toLocaleTimeString('en-SG'),
-      s.photo_url ? 'Yes' : 'No', s.doc_url ? 'Yes' : 'No',
-      s.photo_url || '', s.doc_url || ''
-    ].join(',');
+    return [`"${s.name}"`,`"${s.student_id||''}"`,`"${s.class}"`,`"${s.lesson}"`,dt.toLocaleDateString('en-SG'),dt.toLocaleTimeString('en-SG'),s.photo_url?'Yes':'No',s.doc_url?'Yes':'No',s.photo_url||'',s.doc_url||''].join(',');
   });
   const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([header, ...rows].join('\n'));
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent([header,...rows].join('\n'));
   a.download = 'sdw2026-attendance.csv';
   a.click();
 }
 
-// ── Photo modal ──
-function openPhoto(url) {
-  document.getElementById('modal-img').src = url;
-  document.getElementById('photo-modal').classList.add('open');
-}
+function openPhoto(url) { document.getElementById('modal-img').src = url; document.getElementById('photo-modal').classList.add('open'); }
 function closePhoto() { document.getElementById('photo-modal').classList.remove('open'); }
 
 // ══════════════════════════════════════════════
 //  SETTINGS
 // ══════════════════════════════════════════════
 function renderTagLists() {
-  renderTags('cls-tag-list', cfg.classes || [], 'class');
-  renderTags('les-tag-list', cfg.lessons || [], 'lesson');
+  renderTags('cls-tag-list', cfg.classes||[], 'class');
+  renderTags('les-tag-list', cfg.lessons||[], 'lesson');
 }
 
 function renderTags(id, items, type) {
   const wrap = document.getElementById(id);
-  if (!items.length) { wrap.innerHTML = '<span style="font-size:13px;color:var(--ink3)">None added yet.</span>'; return; }
-  wrap.innerHTML = items.map((item, i) =>
-    `<div class="tag-item">${esc(item)}<button class="tag-remove" onclick="removeTag('${type}',${i})">×</button></div>`
-  ).join('');
+  if (!items.length) { wrap.innerHTML='<span style="font-size:13px;color:var(--ink3)">None added yet.</span>'; return; }
+  wrap.innerHTML = items.map((item,i) => `<div class="tag-item">${esc(item)}<button class="tag-remove" onclick="removeTag('${type}',${i})">×</button></div>`).join('');
 }
 
 async function addTag(type) {
-  const key = type === 'class' ? 'new-class' : 'new-lesson';
+  const key = type==='class' ? 'new-class' : 'new-lesson';
   const val = document.getElementById(key).value.trim();
   if (!val) return;
-  const arr = type === 'class' ? 'classes' : 'lessons';
-  if (!cfg[arr]) cfg[arr] = [];
+  const arr = type==='class' ? 'classes' : 'lessons';
+  if (!cfg[arr]) cfg[arr]=[];
   if (cfg[arr].includes(val)) { document.getElementById(key).select(); return; }
   cfg[arr].push(val);
   await saveConfig();
-  document.getElementById(key).value = '';
+  document.getElementById(key).value='';
   renderTagLists();
-  toast(`${type === 'class' ? 'Class' : 'Lesson'} added`);
+  toast(`${type==='class'?'Class':'Lesson'} added`);
 }
 
 async function removeTag(type, idx) {
-  const arr = type === 'class' ? 'classes' : 'lessons';
-  cfg[arr].splice(idx, 1);
+  const arr = type==='class' ? 'classes' : 'lessons';
+  cfg[arr].splice(idx,1);
   await saveConfig();
   renderTagLists();
 }
@@ -990,31 +970,30 @@ async function changePW() {
   const np = document.getElementById('pw-new').value;
   const nc = document.getElementById('pw-confirm').value;
   const msg = document.getElementById('pw-msg');
-  if (!np) { msg.style.color = 'var(--red)'; msg.textContent = 'Enter a new password.'; return; }
-  if (np.length < 4) { msg.style.color = 'var(--red)'; msg.textContent = 'Minimum 4 characters.'; return; }
-  if (np !== nc) { msg.style.color = 'var(--red)'; msg.textContent = 'Passwords do not match.'; return; }
+  if (!np) { msg.style.color='var(--red)'; msg.textContent='Enter a new password.'; return; }
+  if (np.length<4) { msg.style.color='var(--red)'; msg.textContent='Minimum 4 characters.'; return; }
+  if (np!==nc) { msg.style.color='var(--red)'; msg.textContent='Passwords do not match.'; return; }
   cfg.pw_hash = hashStr(np);
   await saveConfig();
-  document.getElementById('pw-new').value = '';
-  document.getElementById('pw-confirm').value = '';
-  msg.style.color = 'var(--green)'; msg.textContent = 'Password updated ✓';
-  document.getElementById('pw-hint').style.display = 'none';
-  setTimeout(() => msg.textContent = '', 3000);
+  document.getElementById('pw-new').value='';
+  document.getElementById('pw-confirm').value='';
+  msg.style.color='var(--green)'; msg.textContent='Password updated ✓';
+  document.getElementById('pw-hint').style.display='none';
+  setTimeout(()=>msg.textContent='',3000);
 }
 
 async function clearAllData() {
   if (!confirm('Delete ALL attendance records from the database? This cannot be undone.')) return;
   setLoading(true);
-  // Delete all storage files
   const paths = allSubs.flatMap(s => {
-    const arr = [];
-    if (s.photo_url) { const p = s.photo_url.split('/attendance-files/')[1]; if (p) arr.push(p); }
-    if (s.doc_url) { const p = s.doc_url.split('/attendance-files/')[1]; if (p) arr.push(p); }
+    const arr=[];
+    if (s.photo_url){const p=s.photo_url.split('/attendance-files/')[1];if(p)arr.push(p);}
+    if (s.doc_url)  {const p=s.doc_url.split('/attendance-files/')[1];  if(p)arr.push(p);}
     return arr;
   });
   if (paths.length) await sb.storage.from('attendance-files').remove(paths);
-  await sb.from('att_submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  allSubs = [];
+  await sb.from('att_submissions').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  allSubs=[];
   renderStats(); renderTable(); buildFilters();
   toast('All records deleted');
   setLoading(false);
@@ -1024,7 +1003,7 @@ async function clearAllData() {
 //  UTIL
 // ══════════════════════════════════════════════
 function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ══════════════════════════════════════════════
